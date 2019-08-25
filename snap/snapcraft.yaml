@@ -1,0 +1,85 @@
+name: firmware-manager
+version: git
+summary: Firmware Manager
+description: GTK application for managing system and device firmware.
+grade: stable # must be 'stable' to release into candidate/stable channels
+confinement: strict
+base: core18
+architectures:
+  - build-on: amd64
+
+plugs:
+  gnome-3-28-1804:
+    interface: content
+    target: $SNAP/gnome-platform
+    default-provider: gnome-3-28-1804
+  gtk-3-themes:
+    interface: content
+    target: $SNAP/data-dir/themes
+    default-provider: gtk-common-themes
+  icon-themes:
+    interface: content
+    target: $SNAP/data-dir/icons
+    default-provider: gtk-common-themes
+  sound-themes:
+    interface: content
+    target: $SNAP/data-dir/sounds
+    default-provider: gtk-common-themes
+
+slots:
+  # for GtkApplication registration
+  firmware-manager:
+    interface: dbus
+    bus: session
+    name: com.system76.FirmwareManager
+
+apps:
+  firmware-manager:
+    command: bin/desktop-launch ${SNAP}/usr/bin/com.system76.FirmwareManager
+    common-id: com.system76.FirmwareManager.desktop
+    desktop: usr/share/applications/com.system76.FirmwareManager.desktop
+    plugs:
+      - desktop
+      - desktop-legacy
+      - fwupd
+      - network
+      - network-control
+      - gsettings
+      - x11
+      - wayland
+      - raw-usb
+      - block-devices
+
+parts:
+  desktop-gnome-platform:
+    source: https://github.com/ubuntu/snapcraft-desktop-helpers.git
+    source-subdir: gtk
+    plugin: make
+    make-parameters: ["FLAVOR=gtk3"]
+    build-packages:
+      - build-essential
+      - libgtk-3-dev
+    override-build: |
+      snapcraftctl build
+      mkdir -pv $SNAPCRAFT_PART_INSTALL/gnome-platform
+
+  firmware-manager:
+    after: [desktop-gnome-platform]
+    #parse-info: [usr/share/metainfo/com.system76.FirmwareManager.appdata.xml]
+    source: .
+    source-type: git
+    plugin: nil
+    organize:
+      snap/firmware-manager/current/usr: usr
+    build-packages:
+      - libdbus-1-dev
+      - liblzma-dev
+      - libssl-dev
+      - libudev-dev
+    override-build: |
+      curl https://sh.rustup.rs -sSf | sh -s -- -y
+      . $HOME/.cargo/env
+      rustup toolchain install nightly
+      rustup default nightly
+      DESTDIR=$SNAPCRAFT_PART_INSTALL make all features='system76 fwupd' prefix=/usr
+      DESTDIR=$SNAPCRAFT_PART_INSTALL make install prefix=/usr
